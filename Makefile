@@ -38,8 +38,8 @@ undefined:
 
 mingw : OS := WINDOWS
 mingw : TARGET := ej2d.exe
-mingw : CFLAGS += -I/usr/include -I/usr/local/include
-mingw : LDFLAGS += -L/usr/bin -lgdi32 -lglew32 -lopengl32 -L/usr/local/bin -llua52
+mingw : CFLAGS += -DGLEW_STATIC -Iextlibs/include
+mingw : LDFLAGS +=  -DGLEW_STATIC -Lextlibs/lib -lgdi32 -lglew -lopengl32 -llua
 mingw : SRC += mingw/window.c mingw/winfw.c mingw/winfont.c
 
 mingw : $(SRC) ej2d
@@ -66,3 +66,9 @@ ej2d :
 clean :
 	-rm -f ej2d.exe
 	-rm -f ej2d
+
+test:
+	ej2d examples/ex01.lua
+	ej2d examples/ex02.lua
+	ej2d examples/ex03.lua
+	ej2d examples/ex04.lua
