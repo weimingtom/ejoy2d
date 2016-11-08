@@ -3,7 +3,7 @@ ios/example/example.xcodeproj/xcuserdata/
 ej2d
 ej2d.dSYM/*
 *.exe
-*.dll
+#*.dll
 *.ilk
 mac/example/example.xcodeproj/xcuserdata
 mac/example/example.xcodeproj/project.xcworkspace/xcuserdata
