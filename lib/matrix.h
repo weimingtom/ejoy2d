@@ -1,7 +1,24 @@
 #ifndef EJOY_2D_MATRIX_H
 #define EJOY_2D_MATRIX_H
 
+#define EJMAT_R_FACTOR (4096.0)
+
 struct matrix {
+	/* The matrix format is :
+	 *
+	 * | m[0] m[1] 0 |
+	 * | m[2] m[3] 0 |
+	 * | m[4] m[5] 1 |
+	 *
+	 * The format of the coordinates of a point is:
+	 *
+	 * | x y 1 |
+	 *
+	 * So, if you want to transform a point p with a matrix m, do:
+	 *
+	 * p * m
+	 *
+	 */
 	int m[6];
 };
 
@@ -29,7 +46,7 @@ matrix_identity(struct matrix *mm) {
 	mat[5] = 0;
 }
 
-void matrix_inverse(const struct matrix *mm, struct matrix *mo);
+int matrix_inverse(const struct matrix *mm, struct matrix *mo);
 
 struct srt {
 	int offx;
@@ -43,5 +60,6 @@ void matrix_srt(struct matrix *mm, const struct srt *srt);
 void matrix_rot(struct matrix *m, int rot);
 void matrix_scale(struct matrix *m, int sx, int sy);
 void matrix_sr(struct matrix *mat, int sx, int sy, int d);
+void matrix_rs(struct matrix *mat, int sx, int sy, int d);
 
 #endif

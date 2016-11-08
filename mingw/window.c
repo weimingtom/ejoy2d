@@ -51,7 +51,6 @@ init_window(HWND hWnd) {
 	}
 
 	glViewport(0, 0, WIDTH, HEIGHT);
-	glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
 
 	ReleaseDC(hWnd, hDC);
 }
@@ -69,7 +68,7 @@ get_xy(LPARAM lParam, int *x, int *y) {
 	*y = (short)((lParam>>16) & 0xffff); 
 }
 
-LRESULT CALLBACK 
+static LRESULT CALLBACK
 WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
 	switch (message) {
@@ -121,7 +120,7 @@ register_class()
 {
 	WNDCLASSW wndclass;
 
-	wndclass.style = CS_HREDRAW | CS_VREDRAW;
+	wndclass.style = CS_HREDRAW | CS_VREDRAW | CS_OWNDC;
 	wndclass.lpfnWndProc = WndProc;
 	wndclass.cbClsExtra = 0;
 	wndclass.cbWndExtra = 0;

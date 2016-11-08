@@ -1,5 +1,7 @@
 #include "ppm.h"
 #include "texture.h"
+#include "array.h"
+#include "render.h"
 
 #include <lua.h>
 #include <lauxlib.h>
@@ -132,6 +134,7 @@ loadppm_from_file(FILE *rgb, FILE *alpha, struct ppm *ppm) {
 			if (!ppm_header(alpha, ppm)) {
 				return 0;
 			}
+			alpha_id = ppm->type;
 		} else {
 			struct ppm pgm;
 			if (!ppm_header(alpha, &pgm)) {
@@ -165,7 +168,7 @@ static int
 loadppm(lua_State *L) {
 	size_t sz = 0;
 	const char * filename = luaL_checklstring(L, 1, &sz);
-	char tmp[sz + 5];
+	ARRAY(char, tmp, sz+5);
 	sprintf(tmp, "%s.ppm", filename);
 	FILE *rgb = fopen(tmp, "rb");
 	sprintf(tmp, "%s.pgm", filename);
@@ -227,7 +230,7 @@ loadtexture(lua_State *L) {
 	int id = (int)luaL_checkinteger(L,1);
 	size_t sz = 0;
 	const char * filename = luaL_checklstring(L, 2, &sz);
-	char tmp[sz + 5];
+	ARRAY(char, tmp, sz + 5);
 	sprintf(tmp, "%s.ppm", filename);
 	FILE *rgb = fopen(tmp, "rb");
 	sprintf(tmp, "%s.pgm", filename);
@@ -255,15 +258,15 @@ loadtexture(lua_State *L) {
 	int type = 0;
 	if (ppm.depth == 255) {
 		if (ppm.step == 4) {
-			type = Texture2DPixelFormat_RGBA8888;
+			type = TEXTURE_RGBA8;
 		} else if (ppm.step == 3) {
-			type = Texture2DPixelFormat_RGB888;
+			type = TEXTURE_RGB;
 		} else {
-			type = Texture2DPixelFormat_A8;
+			type = TEXTURE_A8;
 		}
 	} else {
 		if (ppm.step == 4) {
-			type = Texture2DPixelFormat_RGBA4444;
+			type = TEXTURE_RGBA8;
 			uint16_t * tmp = (uint16_t * )malloc(ppm.width * ppm.height * sizeof(uint16_t));
 			int i;
 			for (i=0;i<ppm.width * ppm.height;i++) {
@@ -276,7 +279,7 @@ loadtexture(lua_State *L) {
 			free(ppm.buffer);
 			ppm.buffer = (uint8_t*)tmp;
 		} else if (ppm.step == 3) {
-			type = Texture2DPixelFormat_RGB565;
+			type = TEXTURE_RGB565;
 			uint16_t * tmp = (uint16_t *)malloc(ppm.width * ppm.height * sizeof(uint16_t));
 			int i;
 			for (i=0;i<ppm.width * ppm.height;i++) {
@@ -303,7 +306,7 @@ loadtexture(lua_State *L) {
 			free(ppm.buffer);
 			ppm.buffer = (uint8_t*)tmp;
 		} else {
-			type = Texture2DPixelFormat_A8;
+			type = TEXTURE_RGBA8;
 			int i;
 			for (i=0;i<ppm.width * ppm.height;i++) {
 				uint8_t c =	ppm.buffer[i];
@@ -316,7 +319,7 @@ loadtexture(lua_State *L) {
 		}
 	}
 
-	const char * err = texture_load(id, type, ppm.width, ppm.height, ppm.buffer);
+	const char * err = texture_load(id, (enum TEXTURE_FORMAT)type, ppm.width, ppm.height, ppm.buffer, lua_toboolean(L, 3));
 	free(ppm.buffer);
 	if (err) {
 		return luaL_error(L, "%s", err);
@@ -368,7 +371,9 @@ static void
 save_rgb(lua_State *L, int step, int depth) {
 	size_t sz = 0;
 	const char * filename = lua_tolstring(L, 1, &sz);
-	char tmp[sz + 5];
+
+	ARRAY(char, tmp, sz + 5);
+
 	int width = (int)lua_tointeger(L, 3);
 	int height = (int)lua_tointeger(L, 4);
 	sprintf(tmp, "%s.ppm", filename);
@@ -404,7 +409,9 @@ static void
 save_alpha(lua_State *L, int step, int depth, int offset) {
 	size_t sz = 0;
 	const char * filename = lua_tolstring(L, 1, &sz);
-	char tmp[sz + 5];
+
+	ARRAY(char, tmp, sz + 5);
+
 	int width = (int)lua_tointeger(L, 3);
 	int height = (int)lua_tointeger(L, 4);
 	sprintf(tmp, "%s.pgm", filename);
@@ -457,6 +464,13 @@ saveppm(lua_State *L) {
 
 	return 0;
 }
+static int
+unload_tex(struct lua_State* L)
+{
+	int id = (int) luaL_checkinteger(L, 1);
+	texture_unload(id);
+	return 0;
+}
 
 int 
 ejoy2d_ppm(lua_State *L) {
@@ -464,6 +478,7 @@ ejoy2d_ppm(lua_State *L) {
 		{ "texture", loadtexture },
 		{ "load", loadppm },
 		{ "save", saveppm },
+		{ "unload",unload_tex},
 		{ NULL, NULL },
 	};
 

@@ -15,6 +15,7 @@ local TYPE_ANIMATION = assert(pack.TYPE_ANIMATION)
 local TYPE_POLYGON = assert(pack.TYPE_POLYGON)
 local TYPE_LABEL = assert(pack.TYPE_LABEL)
 local TYPE_PANNEL = assert(pack.TYPE_PANNEL)
+local TYPE_MATRIX =assert(pack.TYPE_MATRIX)
 
 local function pack_picture(src, ret)
 	table.insert(ret , pack.byte(TYPE_PICTURE))
@@ -85,11 +86,15 @@ local function pack_part(data, ret)
 		local tag = "i"
 		assert(data.index, "frame need an index")
 		local mat = data.mat
-		if is_identity(mat) then
-			mat = nil
-		end
-		if mat then
-			tag = tag .. "m"
+		if type(mat) == "number" then
+			tag = tag .. "M"
+		else
+			if is_identity(mat) then
+				mat = nil
+			end
+			if mat then
+				tag = tag .. "m"
+			end
 		end
 		if data.color and data.color ~= 0xffffffff then
 			tag = tag .. "c"
@@ -97,15 +102,19 @@ local function pack_part(data, ret)
 		if data.add and data.add ~= 0 then
 			tag = tag .. "a"
 		end
-		if data.touch and data.touch == 1 then
+		if data.touch then
 			tag = tag .. "t"
 		end
 		table.insert(ret, pack.frametag(tag))
 
 		table.insert(ret, pack.word(data.index))
 		if mat then
-			for i=1,6 do
-				table.insert(ret, pack.int32(mat[i]))
+			if type(mat) == "number" then
+				table.insert(ret, pack.int32(mat))
+			else
+				for i=1,6 do
+					table.insert(ret, pack.int32(mat[i]))
+				end
 			end
 		end
 		if data.color and data.color ~= 0xffffffff then
@@ -114,7 +123,7 @@ local function pack_part(data, ret)
 		if data.add and data.add ~= 0 then
 			table.insert(ret, pack.color(data.add))
 		end
-		if data.touch and data.touch == 1 then
+		if data.touch then
 			table.insert(ret, pack.word(1))
 		end
 		return pack.part_size(mat)
@@ -123,7 +132,7 @@ end
 
 local function pack_frame(data, ret)
 	local size = 0
-	table.insert(ret, pack.byte(#data))
+	table.insert(ret, pack.word(#data))
 	for _,v in ipairs(data) do
 		local psize = pack_part(v, ret)
 		size = size + psize
@@ -138,6 +147,10 @@ local function pack_label(data, ret)
 	table.insert(ret, pack.word(data.size))
 	table.insert(ret, pack.word(data.width))
 	table.insert(ret, pack.word(data.height))
+    table.insert(ret, pack.byte(data.noedge and 0 or 1))
+    table.insert(ret, pack.byte(data.space_w or 0))
+    table.insert(ret, pack.byte(data.space_h or 0))
+    table.insert(ret, pack.byte(data.auto_size or 0))
 	return pack.label_size()
 end
 
@@ -156,8 +169,12 @@ local function pack_animation(data, ret)
 	local component = assert(data.component)
 	table.insert(ret , pack.word(#component))
 	for _, v in ipairs(component) do
-		if v.id > max_id then
+		if v.id and v.id > max_id then
 			max_id = v.id
+		end
+		if v.id == nil then
+			assert(v.name, "Anchor need a name")
+			v.id = 0xffff	-- Anchor use id 0xffff
 		end
 		table.insert(ret, pack.word(v.id))
 		table.insert(ret, pack.string(v.name))
@@ -188,14 +205,25 @@ function spritepack.pack( data )
 	local ani_maxid = 0
 
 	for _,v in ipairs(data) do
-		if v.type ~= "particle" then
+		if v.type == "matrix" then
+			table.insert(ret.data, pack.word(0))	-- dummy id for TYPE_MATRIX
+			table.insert(ret.data, pack.byte(TYPE_MATRIX))
+			local n = #v
+			table.insert(ret.data, pack.int32(n))
+			for _, mat in ipairs(v) do
+				for i=1,6 do
+					table.insert(ret.data, pack.int32(mat[i]))
+				end
+			end
+			ret.size = ret.size + n * 24	-- each matrix 24 bytes
+		elseif v.type ~= "particle" then
 			local id = assert(tonumber(v.id))
 			if id > ret.maxid then
 				ret.maxid = id
 			end
 			local exportname = v.export
 			if exportname then
-				assert(ret.export[exportname] == nil, "Duplicate export name")
+				assert(ret.export[exportname] == nil, "Duplicate export name"..exportname)
 				ret.export[exportname] = id
 			end
 			table.insert(ret.data, pack.word(id))
@@ -239,6 +267,41 @@ function spritepack.pack( data )
 	return ret
 end
 
+function spritepack.export(meta)
+	local result = { true }
+	table.insert(result, pack.word(meta.maxid))
+	table.insert(result, pack.word(meta.texture))
+	table.insert(result, pack.int32(meta.size))
+	table.insert(result, pack.int32(#meta.data))
+	local s = 0
+	for k,v in pairs(meta.export) do
+		table.insert(result, pack.word(v))
+		table.insert(result, pack.string(k))
+		s = s + 1
+	end
+	result[1] = pack.word(s)
+	table.insert(result, meta.data)
+	return table.concat(result)
+end
+
+function spritepack.import(data)
+	local meta = { export = {} }
+	local export_n, off = pack.import_value(data, 1, 'w')
+	meta.maxid , off = pack.import_value(data, off, 'w')
+	meta.texture , off = pack.import_value(data, off, 'w')
+	meta.size , off = pack.import_value(data, off, 'i')
+	meta.data_sz , off = pack.import_value(data, off, 'i')
+	for i=1, export_n do
+		local id, name
+		id, off = pack.import_value(data, off, 'w')
+		name, off = pack.import_value(data, off, 's')
+		meta.export[name] = id
+	end
+	meta.data = pack.import_value(data, off, 'p')
+
+	return meta
+end
+
 function spritepack.init( name, texture, meta )
 	assert(pack_pool[name] == nil , string.format("sprite package [%s] is exist", name))
 	if type(texture) == "number" then
@@ -247,9 +310,10 @@ function spritepack.init( name, texture, meta )
 		assert(meta.texture == #texture)
 	end
 	pack_pool[name] = {
-		cobj = pack.import(texture,meta.maxid,meta.size,meta.data),
+		cobj = pack.import(texture,meta.maxid,meta.size,meta.data, meta.data_sz),
 		export = meta.export,
 	}
+	meta.data = nil
 
 	return pack_pool[name]
 end
